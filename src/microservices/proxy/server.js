@@ -1,0 +1,67 @@
+require('dotenv').config();
+
+const express = require('express');
+const httpProxy = require('http-proxy-middleware');
+
+const app = express();
+app.use(express.json());
+
+// Конфигурация
+const config = {
+    monolithUrl: process.env.MONOLITH_URL,
+    moviesServiceUrl: process.env.MOVIES_SERVICE_URL,
+    gradualMigration: process.env.GRADUAL_MIGRATION === 'true',
+    migrationPercent: getMigrationPercent(process.env.MOVIES_MIGRATION_PERCENT)
+};
+
+// Валидация конфигурации
+if (!config.monolithUrl || !config.moviesServiceUrl) {
+    throw new Error('Missing required environment variables');
+}
+
+// Фабрика прокси
+const createProxy = (target) => httpProxy.createProxyMiddleware({
+    target,
+    changeOrigin: true,
+    pathRewrite: {'/?': '',},
+    onError: (err, req, res) => {
+        console.error(`Proxy error: ${err.message}`);
+        res.status(502).json({ error: 'Bad Gateway' });
+    },
+    logger: console
+});
+
+// Роутинг
+app.use('/health', (req, res) => res.status(200).json({ status: 'OK' }));
+
+app.use('/api/*', (req, res) => {
+    if (!config.gradualMigration) {
+        return createProxy(config.monolithUrl + req.originalUrl)(req, res);
+    }
+    console.log();
+    const shouldMigrate = Math.random() * 100 < config.migrationPercent;
+    const target = (shouldMigrate ? config.moviesServiceUrl : config.monolithUrl ) + req.originalUrl;
+console.log(req)
+    console.log(`Proxying to ${target}`);
+    return createProxy(target)(req, res);
+});
+// const target =  config.moviesServiceUrl
+//
+// app.use(createProxy(target))
+
+// Запуск сервера
+const PORT = process.env.PORT || 8000;
+app.listen(PORT, () => {
+    console.log(`Proxy server running on port ${PORT}`);
+    console.log('Current configuration:', config);
+});
+
+// Утилиты
+function getMigrationPercent(value) {
+    return isValidPercent(value) ? Number(value) : 0;
+}
+
+function isValidPercent(val) {
+    const num = Number(val);
+    return !isNaN(num) && num >= 0 && num <= 100;
+}
