@@ -3,6 +3,14 @@ const express = require('express');
 const { Kafka, Partitioners } = require('kafkajs');
 
 const app = express();
+app.use((req, res, next) => {
+    console.log('Incoming request:', {
+        method: req.method,
+        url: req.url,
+        body: req.body
+    });
+    next();
+});
 app.use(express.json());
 
 // Configuration
