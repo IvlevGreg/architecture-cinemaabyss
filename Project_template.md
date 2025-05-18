@@ -349,7 +349,7 @@ minikube tunnel
 
 Потом вызовите 
 https://cinemaabyss.example.com/api/movies
-
+![img.png](doc/assets/img.png)
 
 ## Удаляем все
 
