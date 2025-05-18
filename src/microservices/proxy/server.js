@@ -38,10 +38,8 @@ app.use('/api/*', (req, res) => {
     if (!config.gradualMigration) {
         return createProxy(config.monolithUrl + req.originalUrl)(req, res);
     }
-    console.log();
     const shouldMigrate = Math.random() * 100 < config.migrationPercent;
     const target = (shouldMigrate ? config.moviesServiceUrl : config.monolithUrl ) + req.originalUrl;
-console.log(req)
     console.log(`Proxying to ${target}`);
     return createProxy(target)(req, res);
 });
