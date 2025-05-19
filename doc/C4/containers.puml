@@ -1,0 +1,101 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_TOP_DOWN()
+LAYOUT_WITH_LEGEND()
+
+Person(user,'User','Ноутбук, смартфон, ТВ')
+
+System_Boundary(c1, "Кинобездна"){
+     Container(front_seo,'SEO-страницы','SSR, SSG, Next.js', 'Продвижение через SEO')
+     Container(front_spa,'Страницы портала', 'SPA, React, Module Federation', 'Основные страницы сервиса "Кинобездна"')
+
+     Container(bff, Backend For Frontend,'Node.js, Koa', 'Агрегация данных, авторизация')
+     Container(bff_redis, Redis для BFF,'Redis', 'Кэш запросов')
+
+    Container(gateway, Api gateway, 'Nginx', 'Балансировка, проксирование, управление авторизацией')
+
+    Container(auth_service, Auth service, 'OAuth2, Go, Redis', 'Авторизация/аутентификация пользователя')
+    Container(user_data_service, User service, 'Go, PostgreSQL, Redis', 'Управляет данными пользователя')
+    Container(user_recommendation, 'User recommendation service', 'Go, PostgreSQL, Redis', 'Сохраняет пользовательские предпочтения, управляет пользовательскими рекомендациями' )
+    Container(feedback_service, 'User feedback service', 'Go, PostgreSQL, Redis', 'Оценки, рецензии, избранное')
+    Container(payment_service, 'Payment service', 'Go, PostgreSQL, Redis', 'Платежи, выплаты контрагентам')
+    Container(subscribe_service, 'Subscribe service', 'Go, PostgreSQL, Redis', 'Подписки, скидки')
+    Container(loyalty_service, 'Loyalty_service', 'Go, PostgreSQL, Redis', 'Интеграция с сервисами лояльности')
+    Container(marketplace_service, 'Marketplace_service', 'Go, PostgreSQL, Redis', 'Интеграция с маркетплейсами')
+    Container(notification_service, 'Notification service', 'Go, PostgreSQL, Redis', 'Уведомления (email, SMS)')
+    Container(content_service, 'Content service', 'Go, PostgreSQL, Redis', 'Метаданные фильмов')
+    Container(streaming_service, 'Streaming service', 'Go, S3, HLS', 'Стриминг видео')
+    Container(security_service, 'Security service', 'Go, PostgreSQL', 'Защита контента, шифрование данных, вотермарки')
+
+    Container(message_bus, 'Message bus', 'Kafka', 'Асинхронная обработка событий')
+}
+
+System_Ext(ext_recommend, Recommend system,'Внешняя рекомендательная система')
+System_Ext(online_cinema, Online cinemas,'Онлайн кинотеатры')
+System_Ext(s3, S3,'Хранилище контента')
+System_Ext(mindbox, Mindbox,'CRM-платформа')
+System_Ext(ext_payment_system,'External payment system','Платёжный шлюз')
+System_Ext(ext_loyalty_system,'External loyalty system','Сервисы лояльности')
+System_Ext(ext_marketplace_service,'External marketplace system','Маркетплейсы')
+System_Ext(ext_content_service,'External content system','Сервис информации о фильмах, авторах, актерах и тд')
+
+Rel(user, front_seo, 'Просмотр SEO-страниц')
+Rel(user, front_spa, 'Взаимодействие с SPA')
+
+BiRel_R(front_seo, front_spa, 'Переход пользователя')
+
+
+Rel(front_spa, bff, 'API-запросы', 'REST/GraphQL')
+Rel(front_spa, streaming_service, 'Стриминг контента','HLS')
+
+Rel(front_seo, bff, 'SSR-запросы, API-запросы')
+
+Rel_D(bff, gateway, 'Маршрутизация запросов')
+Rel_L(bff, bff_redis, 'Кэширование данных')
+
+Rel(gateway, auth_service, 'Запросы на аутентификацию', 'JWT')
+Rel(gateway, user_data_service, 'Запросы пользовательской информации', 'REST/GraphQL')
+Rel(gateway, user_recommendation, 'Запрос получения рекомендаций', 'REST')
+Rel(gateway, feedback_service, 'Отправка пользовательских предпочтений', 'REST')
+Rel(gateway, subscribe_service, 'Получение информации о подписках', 'REST')
+Rel(gateway, loyalty_service, 'Получение информации о сервисах лояльности', 'REST')
+Rel(gateway, content_service, 'Получение медиа-контента', 'REST/GraphQL')
+Rel(gateway, payment_service, 'Получение ссылки на оплату', 'REST')
+Rel(gateway, marketplace_service, 'Получение информации о интеграции с маркетплейсами', 'REST')
+Rel(gateway, notification_service, 'Получение информации о уведомлениях', 'REST')
+Rel(gateway, streaming_service, 'Получение информации о  стриминге', 'HLS')
+
+Rel_L(subscribe_service, payment_service, 'Создание платежа')
+
+
+Rel_U(feedback_service, message_bus, 'События предпочтений пользователя','Kafka')
+
+Rel_D(message_bus, user_recommendation, 'Обновление рекомендаций', 'Kafka')
+Rel_L(message_bus, mindbox, 'События пользователя', 'Kafka')
+
+BiRel_D(user_recommendation, ext_recommend, 'Отправка пользовательских предпочтений и получение рекомендаций')
+
+BiRel(payment_service, ext_payment_system, 'Подготовка и получение статуса оплаты пользователя')
+BiRel_D(payment_service, ext_marketplace_service, 'Расчёты с партнёрами')
+BiRel_D(payment_service, online_cinema, 'Расчёты с партнёрами')
+BiRel_D(payment_service, ext_loyalty_system, 'Расчёты с партнёрами')
+
+Rel(loyalty_service, ext_loyalty_system, 'Обмен данными')
+
+Rel(marketplace_service, ext_marketplace_service, 'Включает/выключает интеграцию, управляет условиями')
+
+Rel_U(notification_service, message_bus, 'Обработка уведомлений', 'Kafka')
+
+Rel(content_service, ext_content_service, 'Обмен данными')
+
+BiRel_U(user_data_service, security_service,'Шифрование/дешифрование пользовательских данных')
+
+Rel_U(content_service, security_service,'Шифрование, добавление вотермарк, проверка авторских прав контента')
+
+Rel_U(streaming_service, security_service,'Шифрование, добавление вотермарк, проверка авторских прав для стримингового контента')
+Rel_D(streaming_service, s3, 'Стриминг контента','HLS')
+Rel(streaming_service, online_cinema,'Стриминг контента (интеграция напрямую)','HLS')
+
+@enduml
+
