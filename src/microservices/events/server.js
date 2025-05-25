@@ -1,8 +1,11 @@
 require('dotenv').config();
 const express = require('express');
+const morgan = require('morgan');
 const { Kafka, Partitioners } = require('kafkajs');
 
 const app = express();
+app.use(morgan('combined'));
+
 app.use((req, res, next) => {
     console.log('Incoming request:', {
         method: req.method,
