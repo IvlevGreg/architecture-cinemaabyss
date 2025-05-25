@@ -28,6 +28,7 @@ const createProxy = (target) => httpProxy.createProxyMiddleware({
         res.status(502).json({ error: 'Bad Gateway' });
     },
     logger: console,
+
 });
 
 app.use('/health', (req, res) => res.status(200).json({ status: 'OK' }));
@@ -37,7 +38,7 @@ app.use('/api/*', (req, res) => {
         return createProxy(config.monolithUrl + req.originalUrl)(req, res);
     }
     const shouldMigrate = Math.random() * 100 < config.migrationPercent;
-    const target = (shouldMigrate ? config.moviesServiceUrl : config.monolithUrl ) + req.originalUrl;
+    const target = (shouldMigrate ? config.moviesServiceUrl : config.monolithUrl );
     console.log(`Proxying to ${target}`);
     return createProxy(target)(req, res);
 });
