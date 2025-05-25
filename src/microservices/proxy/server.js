@@ -23,18 +23,11 @@ if (!config.monolithUrl || !config.moviesServiceUrl) {
 const createProxy = (target) => httpProxy.createProxyMiddleware({
     target,
     changeOrigin: true,
-    pathRewrite: {'/?': '',},
     onError: (err, req, res) => {
         console.error(`Proxy error: ${err.message}`);
         res.status(502).json({ error: 'Bad Gateway' });
     },
     logger: console,
-    buffer: false, // Отключает буферизацию тела
-    proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
-        // Сохраняем оригинальные заголовки
-        proxyReqOpts.headers['Content-Type'] = srcReq.headers['content-type'];
-        return proxyReqOpts;
-    }
 });
 
 app.use('/health', (req, res) => res.status(200).json({ status: 'OK' }));
