@@ -14,7 +14,34 @@ app.use((req, res, next) => {
     });
     next();
 });
-app.use(express.json());
+app.use(express.json({
+    verify: (req, res, buf, encoding) => {
+        try {
+            JSON.parse(buf.toString());
+        } catch (e) {
+            const errorPosition = e.message.match(/position (\d+)/)?.[1] || 'unknown';
+            const invalidJson = buf.toString();
+
+            console.error('Invalid JSON detected:', {
+                url: req.url,
+                method: req.method,
+                error: e.message,
+                position: errorPosition,
+                rawBody: invalidJson,
+                preview: invalidJson.slice(Math.max(0, errorPosition - 20), errorPosition + 20)
+            });
+
+            res.status(400).json({
+                error: "Invalid JSON",
+                details: {
+                    message: e.message,
+                    position: parseInt(errorPosition)
+                }
+            });
+            throw e; // Остановить дальнейшую обработку
+        }
+    }
+}));
 
 // Configuration
 const KAFKA_BROKERS = process.env.KAFKA_BROKERS;
