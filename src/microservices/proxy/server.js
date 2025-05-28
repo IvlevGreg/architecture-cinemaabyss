@@ -31,6 +31,7 @@ const monolithProxy = createProxyMiddleware(config.monolithUrl);
 const moviesServiceProxy = createProxyMiddleware(config.moviesServiceUrl);
 
 app.get('/proxy/health', (req, res) => res.status(200).json({ status: 'OK' }));
+app.get('/api/movies/health', moviesServiceProxy);
 
 app.use('*', monolithProxy);
 
