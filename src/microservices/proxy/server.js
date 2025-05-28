@@ -1,43 +1,12 @@
 require('dotenv').config();
-
 const express = require('express');
 const morgan = require('morgan');
-const httpProxy = require('http-proxy-middleware');
+const proxy = require('express-http-proxy');
 
 const app = express();
+
 app.use(morgan('combined'));
 
-app.use(express.json({
-    verify: (req, res, buf, encoding) => {
-        try {
-            JSON.parse(buf.toString());
-        } catch (e) {
-            const errorPosition = e.message.match(/position (\d+)/)?.[1] || 'unknown';
-            const invalidJson = buf.toString();
-
-            console.error('Invalid JSON detected:', {
-                url: req.url,
-                method: req.method,
-                error: e.message,
-                position: errorPosition,
-                rawBody: invalidJson,
-                preview: invalidJson.slice(Math.max(0, errorPosition - 20), errorPosition + 20)
-            });
-
-            res.status(400).json({
-                error: "Invalid JSON",
-                details: {
-                    message: e.message,
-                    position: parseInt(errorPosition)
-                }
-            });
-            throw e; // Остановить дальнейшую обработку
-        }
-    }
-}));
-app.use(express.json());
-
-// Конфигурация
 const config = {
     monolithUrl: process.env.MONOLITH_URL,
     moviesServiceUrl: process.env.MOVIES_SERVICE_URL,
@@ -45,47 +14,52 @@ const config = {
     migrationPercent: getMigrationPercent(process.env.MOVIES_MIGRATION_PERCENT)
 };
 
-// Валидация конфигурации
 if (!config.monolithUrl || !config.moviesServiceUrl) {
     throw new Error('Missing required environment variables');
 }
 
-// Фабрика прокси
-const createProxy = (target) => httpProxy.createProxyMiddleware({
-    target,
-    changeOrigin: true,
-    pathRewrite: {'/?': '',},
-    onError: (err, req, res) => {
-        console.error(`Proxy error: ${err.message}`);
-        res.status(502).json({ error: 'Bad Gateway' });
-    },
-    logger: console
-});
+const createProxyMiddleware = (targetBaseUrl) =>
+    proxy(targetBaseUrl, {
+        proxyReqPathResolver: (req) => req.originalUrl,
+        proxyErrorHandler: (err, res) => {
+            console.error(`Proxy error: ${err.message}`);
+            res.status(502).json({ error: 'Bad Gateway' });
+        }
+    });
 
-// Роутинг
-app.use('/health', (req, res) => res.status(200).json({ status: 'OK' }));
+const monolithProxy = createProxyMiddleware(config.monolithUrl);
+const moviesServiceProxy = createProxyMiddleware(config.moviesServiceUrl);
 
-app.use('/api/*', (req, res) => {
+app.get('/proxy/health', (req, res) => res.status(200).json({ status: 'OK' }));
+
+app.use('*', monolithProxy);
+
+
+app.use('/api/movies', (req, res, next) => {
     if (!config.gradualMigration) {
-        return createProxy(config.monolithUrl + req.originalUrl)(req, res);
+        return monolithProxy(req, res, next);
     }
-    const shouldMigrate = Math.random() * 100 < config.migrationPercent;
-    const target = (shouldMigrate ? config.moviesServiceUrl : config.monolithUrl ) + req.originalUrl;
-    console.log(`Proxying to ${target}`);
-    return createProxy(target)(req, res);
-});
-// const target =  config.moviesServiceUrl
-//
-// app.use(createProxy(target))
 
-// Запуск сервера
+    const shouldMigrate = Math.random() * 100 < config.migrationPercent;
+    const targetService = shouldMigrate
+        ? config.moviesServiceUrl
+        : config.monolithUrl;
+
+    console.log(`Movies proxying to ${targetService}${req.originalUrl}`);
+
+    if (shouldMigrate) {
+        return moviesServiceProxy(req, res, next);
+    } else {
+        return monolithProxy(req, res, next);
+    }
+});
+
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
     console.log(`Proxy server running on port ${PORT}`);
     console.log('Current configuration:', config);
 });
 
-// Утилиты
 function getMigrationPercent(value) {
     return isValidPercent(value) ? Number(value) : 0;
 }
